@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>PlaceTurk</title>
+<link rel="icon" type="image/jpeg" href="placeturk-logo.jpg">
+<style>
+  html, body { margin:0; height:100%; overflow:hidden; background:#111; }
+  canvas { background:#fff; display:block; touch-action:none; transform-origin:0 0; }
+  #palette {
+    position:fixed; bottom:0; left:0; right:0;
+    background:#222; padding:8px;
+    display:flex; gap:6px; overflow-x:auto; justify-content:center;
+  }
+  .color { width:24px; height:24px; border:2px solid #555; flex-shrink:0; }
+  .selected { border:2px solid gold; }
+  #cooldown {
+    position:fixed; top:10px; right:10px;
+    background:#222; padding:6px 10px; border-radius:6px;
+    font-size:14px; font-weight:bold; color:lime;
+  }
+  #topLeftBar {
+    position:fixed; top:10px; left:10px; z-index:10;
+    display:flex; align-items:center; gap:8px;
+    background:#222; padding:6px 10px; border-radius:6px;
+  }
+  #gameLogo { width:28px; height:28px; object-fit:contain; border-radius:5px; flex-shrink:0; }
+  #founderText { font-size:14px; font-weight:bold; color:#FFD700; white-space:nowrap; }
+  #early {
+    position:fixed;
+    top:50%;
+    right:10px;
+    transform:translateY(-50%);
+    background:#222;
+    color:#FFD700;
+    padding:8px 12px;
+    border-radius:6px;
+    font-weight:bold;
+  }
+  #fitBtn {
+    position:fixed; top:10px; left:50%; transform:translateX(-50%);
+    background:#222; color:#fff; border:none; border-radius:6px;
+    padding:6px 12px; font-size:13px; font-weight:bold;
+  }
+  #confirmBar {
+    position:fixed; left:50%; transform:translateX(-50%);
+    background:#222; padding:10px 14px; border-radius:10px;
+    display:none; align-items:center; gap:10px; z-index:20;
+    box-shadow:0 2px 12px rgba(0,0,0,.5);
+  }
+  #confirmSwatch { width:22px; height:22px; border:2px solid #555; border-radius:4px; flex-shrink:0; }
+  #confirmBtn, #cancelBtn {
+    padding:8px 14px; border:none; border-radius:6px; font-weight:bold; font-size:14px;
+  }
+  #confirmBtn { background:#2ecc71; color:#fff; }
+  #confirmBtn:disabled { background:#666; color:#aaa; }
+  #cancelBtn { background:#555; color:#fff; }
+
+  .hidden { display:none !important; }
+
+  #mainMenu {
+    position:fixed; inset:0; z-index:100;
+    background:radial-gradient(circle at 50% 20%, #2a2a2a, #0d0d0d 70%);
+    display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:16px; padding:24px; box-sizing:border-box;
+    overflow-y:auto; text-align:center; color:#fff;
+    font-family:Arial, sans-serif;
+  }
+  #menuLogo {
+    max-width:140px; max-height:140px; object-fit:contain;
+  }
+  #menuTitle { font-size:32px; font-weight:bold; margin:0; color:#FFD700; }
+  #menuSubtitle { font-size:14px; color:#aaa; margin:-8px 0 0 0; }
+  #playBtn {
+    background:#2ecc71; color:#fff; border:none; border-radius:10px;
+    padding:14px 36px; font-size:18px; font-weight:bold; cursor:pointer;
+    box-shadow:0 4px 14px rgba(46,204,113,.4);
+  }
+  #announceBtn {
+    background:#333; color:#FFD700; border:1px solid #444; border-radius:10px;
+    padding:10px 22px; font-size:15px; font-weight:bold; cursor:pointer;
+  }
+  #announcePanel {
+    position:fixed; inset:0; z-index:110;
+    background:rgba(0,0,0,.92);
+    display:flex; align-items:center; justify-content:center;
+    padding:24px; box-sizing:border-box;
+  }
+  #announcePanelInner {
+    background:#1c1c1c; border:1px solid #333; border-radius:12px;
+    padding:22px 24px; max-width:420px; width:100%;
+    max-height:80vh; overflow-y:auto; box-sizing:border-box;
+    color:#fff; font-family:Arial, sans-serif;
+  }
+  #announcePanelInner h2 { margin:0 0 14px 0; font-size:20px; color:#FFD700; }
+  #announceList {
+    list-style:none; margin:0 0 18px 0; padding:0;
+    display:flex; flex-direction:column; gap:10px;
+  }
+  #announceList li {
+    font-size:14px; color:#ddd; border-bottom:1px solid #2a2a2a;
+    padding-bottom:8px;
+  }
+  #announceList li .announceDate {
+    display:block; font-size:12px; color:#888; margin-bottom:3px;
+  }
+  #closeAnnounceBtn {
+    background:#555; color:#fff; border:none; border-radius:8px;
+    padding:10px 20px; font-size:14px; font-weight:bold; cursor:pointer;
+  }
+
+  /* Mobilde butonları büyüt */
+  @media (max-width: 768px) {
+    .color {
+      width:50px;
+      height:50px;
+      border:2px solid #555;
+    }
+    #palette {
+      gap:10px;
+      padding:12px;
+    }
+    #confirmBtn, #cancelBtn {
+      padding:12px 18px; font-size:16px;
+    }
+    #confirmSwatch { width:28px; height:28px; }
+    #fitBtn { padding:10px 16px; font-size:15px; }
+    #menuLogo { max-width:100px; max-height:100px; }
+    #menuTitle { font-size:26px; }
+    #playBtn { width:100%; max-width:320px; padding:16px; font-size:20px; }
+    #announceBtn { width:100%; max-width:320px; padding:12px; font-size:16px; }
+    #announcePanelInner { max-width:100%; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="board"></canvas>
+<div id="cooldown" class="hud hidden">Hazır!</div>
+<div id="topLeftBar" class="hud hidden">
+  <img id="gameLogo" src="placeturk-logo.jpg" alt="PlaceTurk">
+  <span id="founderText">PlaceTurk V2</span>
+</div>
+<button id="fitBtn" class="hud hidden">Tahtaya Sığdır</button>
+<div id="palette" class="hud hidden"></div>
+<div id="confirmBar">
+  <div id="confirmSwatch"></div>
+  <button id="confirmBtn">Yerleştir</button>
+  <button id="cancelBtn">Vazgeç</button>
+</div>
+<div id="early" class="hud hidden">Erken Erişim</div>
+
+<div id="mainMenu">
+  <!-- Logo dosyası placeturk-logo.jpg olarak proje klasöründe duruyor. -->
+  <img id="menuLogo" src="placeturk-logo.jpg" alt="PlaceTurk logo" onerror="this.style.display='none'">
+  <h1 id="menuTitle">PlaceTurk</h1>
+  <p id="menuSubtitle">Türkiye'nin r/place tarzı ortak piksel tahtası</p>
+  <button id="announceBtn">📢 Duyurular</button>
+  <button id="playBtn">Oyuna Başla</button>
+</div>
+
+<div id="announcePanel" class="hidden">
+  <div id="announcePanelInner">
+    <h2>📢 Duyurular</h2>
+    <ul id="announceList"></ul>
+    <button id="closeAnnounceBtn">Kapat</button>
+  </div>
+</div>
+
+<script>
+const canvas=document.getElementById("board");
+const ctx=canvas.getContext("2d");
+
+const gridSize=200, cellSize=5;
+canvas.width=gridSize*cellSize;
+canvas.height=gridSize*cellSize;
+
+/* Palet – beyazı 2. sıraya ekledik */
+const colors=["#FF0000","#FFFFFF","#00FF00","#0000FF","#FFFF00","#FF00FF","#00FFFF",
+"#000000","#FFA500","#800080","#008000","#808080","#A52A2A","#ADD8E6","#FFC0CB","#FFD700"];
+let currentColor=colors[0];
+const palette=document.getElementById("palette");
+colors.forEach(c=>{
+  const div=document.createElement("div");
+  div.className="color"; div.style.background=c;
+  div.onclick=()=>{
+    document.querySelectorAll(".color").forEach(x=>x.classList.remove("selected"));
+    div.classList.add("selected"); currentColor=c;
+    if(typeof confirmSwatch!=="undefined" && selected) confirmSwatch.style.background=currentColor;
+  };
+  palette.appendChild(div);
+});
+palette.firstChild.classList.add("selected");
+
+/* Cooldown */
+let canPlace=true; let cooldownTime=10*60;
+const cooldownDiv=document.getElementById("cooldown");
+function startCooldown(){
+  canPlace=false; let t=cooldownTime;
+  if(confirmBtn) confirmBtn.disabled=true;
+  const timer=setInterval(()=>{
+    t--; if(t<=0){clearInterval(timer); canPlace=true;
+      cooldownDiv.textContent="Hazır!"; cooldownDiv.style.color="lime";
+      if(confirmBtn) confirmBtn.disabled=false;}
+    else{cooldownDiv.textContent=`${Math.floor(t/60)}:${String(t%60).padStart(2,"0")}`;
+      cooldownDiv.style.color="#ff4444";}
+  },1000);
+}
+
+/* --- Ana Menü: Duyurular ---
+   Yeni bir duyuru eklemek istediğinde bu listeye (en üste) yeni bir
+   {date:"...", text:"..."} satırı eklemen yeterli, başka bir şeye
+   dokunmana gerek yok. */
+const announcements = [
+  { date: "09.09.2026", text: "PlaceTurk yeniden açıldı! Artık verileriniz kalıcı olarak saklanıyor." }
+];
+
+function renderAnnouncements(){
+  const list = document.getElementById("announceList");
+  if(!list) return;
+  if(announcements.length===0){
+    list.innerHTML = "<li>Şu an aktif bir duyuru yok.</li>";
+    return;
+  }
+  list.innerHTML = announcements.map(a=>
+    `<li><span class="announceDate">${a.date}</span>${a.text}</li>`
+  ).join("");
+}
+renderAnnouncements();
+
+/* Ana menü: "Oyuna Başla" tuvali ve HUD'u (palet, cooldown, vb.) açar. */
+const mainMenu = document.getElementById("mainMenu");
+document.getElementById("playBtn").addEventListener("click", ()=>{
+  mainMenu.classList.add("hidden");
+  document.querySelectorAll(".hud").forEach(el=>el.classList.remove("hidden"));
+  fitToScreen(); // palet artik gorunur oldugu icin yuksekligi yeniden hesapla
+});
+
+/* Duyurular: ayrı, kara bir sekme/panel olarak açılıp kapanıyor */
+const announcePanel = document.getElementById("announcePanel");
+document.getElementById("announceBtn").addEventListener("click", ()=>{
+  renderAnnouncements();
+  announcePanel.classList.remove("hidden");
+});
+document.getElementById("closeAnnounceBtn").addEventListener("click", ()=>{
+  announcePanel.classList.add("hidden");
+});
+
+/* WebSocket */
+// Backend'i yeniden dagittiginda (orn. Render, Fly.io, Railway) SADECE
+// bu satiri yeni adresle degistirmen yeterli. wss:// (https) kullan,
+// ws:// (http) sadece yerel test icin.
+const BACKEND_WS_URL = "wss://pixeltur-backend.onrender.com";
+let board=[];
+let socket;
+
+function connect(){
+  socket=new WebSocket(BACKEND_WS_URL);
+  socket.onmessage=e=>{
+    const data=JSON.parse(e.data);
+    if(data.type==="init"){ board=data.board; drawBoard(); }
+    if(data.type==="update"){ drawPixel(data.x,data.y,data.color); }
+  };
+  // Ucretsiz sunucular hareketsizlikte uyuyabilir; baglanti koparsa
+  // birkac saniye sonra otomatik yeniden baglanmayi dene.
+  socket.onclose=()=>{ setTimeout(connect,3000); };
+  socket.onerror=()=>{ socket.close(); };
+}
+connect();
+
+/* Çizim */
+function drawBoard(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  board.forEach(p=>{
+    ctx.fillStyle=p.color;
+    ctx.fillRect(p.x*cellSize,p.y*cellSize,cellSize,cellSize);
+  });
+}
+function drawPixel(x,y,color){
+  ctx.fillStyle=color;
+  ctx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
+}
+
+/* Zoom + Pan state
+   Not: eski koddaki tıklama hesaplaması, offsetX/offsetY'yi hem
+   getBoundingClientRect() üzerinden (dolaylı) hem de elle bir daha
+   çıkararak iki kez hesaba katıyordu. Bu yüzden ekranı biraz kaydırdığın
+   anda tıkladığın yer ile boyanan piksel birbirini tutmuyordu - "pixel
+   atmak zor" şikayetinin asıl sebebi buydu. Aşağıda transform-origin
+   sabit 0,0 kabul edilip offsetX/offsetY tek bir yerden hesaplanıyor. */
+let scale=1, minScale=0.3, maxScale=24;
+let offsetX=0, offsetY=0;
+let isDragging=false, dragMoved=false, startX=0, startY=0;
+let lastPinchDist=0;
+let selected=null; // {x,y}: onay bekleyen hücre
+
+function updateTransform(){
+  canvas.style.transform=`translate(${offsetX}px,${offsetY}px) scale(${scale})`;
+}
+
+/* Sayfa ilk açıldığında (ve döndürüldüğünde) tüm tahtayı ekrana ortala.
+   Eskiden tahta varsayılan olarak 1:1 boyutta açılıp ekranın çok
+   dışına taşıyordu, mobilde "tuval küçük/kayık kalıyor" hissi buradan
+   geliyordu. */
+function fitToScreen(){
+  window.scrollTo(0,0); // sayfa kaymis olsa bile hucre secimi bozulmasin diye garantiye al
+  const paletteH = palette.offsetHeight || 70;
+  const availW = window.innerWidth;
+  const availH = window.innerHeight - paletteH;
+  const fitScale = Math.min(availW/canvas.width, availH/canvas.height);
+  scale = fitScale;
+  minScale = fitScale;
+  offsetX = (availW - canvas.width*scale)/2;
+  offsetY = (availH - canvas.height*scale)/2;
+  updateTransform();
+}
+window.addEventListener("load", fitToScreen);
+window.addEventListener("resize", fitToScreen);
+window.addEventListener("orientationchange", ()=>setTimeout(fitToScreen,250));
+fitToScreen();
+document.getElementById("fitBtn").addEventListener("click", ()=>{ clearSelection(); fitToScreen(); });
+
+/* Ekrandaki (clientX,clientY) noktasını sabit tutarak yakınlaştır/uzaklaştır.
+   Fare tekerleği ve pinch-zoom bu tek fonksiyonu paylaşıyor, bu yüzden
+   ikisi de aynı şekilde ve tutarlı davranıyor. */
+function zoomAt(clientX, clientY, newScale){
+  newScale = Math.min(Math.max(newScale, minScale), maxScale);
+  const factor = newScale/scale;
+  offsetX = clientX - (clientX-offsetX)*factor;
+  offsetY = clientY - (clientY-offsetY)*factor;
+  scale = newScale;
+  updateTransform();
+}
+
+/* Ekran koordinatını grid hücresine çevirir (transform-origin 0,0
+   olduğu için offsetX/offsetY doğrudan kullanılabiliyor). */
+function screenToGrid(clientX, clientY){
+  return {
+    x: Math.floor((clientX-offsetX)/(cellSize*scale)),
+    y: Math.floor((clientY-offsetY)/(cellSize*scale))
+  };
+}
+
+/* --- Dokunarak hücre seçme + onaylama akışı ---
+   Düşük zoom seviyesinde tek pikselin isabetli seçilmesi imkansıza
+   yakındı. Artık dokununca hücre seçiliyor ve boyanmadan önce üstüne
+   basılı bir çerçeveyle "burayı mı boyayacaksın?" diye soruluyor;
+   yanlışlıkla yanına basmak artık bir sorun değil. */
+function selectCell(gx,gy){
+  if(gx<0||gx>=gridSize||gy<0||gy>=gridSize) return;
+  selected={x:gx,y:gy};
+  redrawWithHighlight();
+  showConfirmBar();
+}
+function clearSelection(){
+  selected=null;
+  hideConfirmBar();
+  drawBoard();
+}
+function redrawWithHighlight(){
+  drawBoard();
+  if(!selected) return;
+  ctx.lineWidth=Math.max(1,1/scale);
+  ctx.strokeStyle="#000000";
+  ctx.strokeRect(selected.x*cellSize,selected.y*cellSize,cellSize,cellSize);
+  ctx.strokeStyle="#ffffff";
+  ctx.lineWidth=Math.max(0.5,0.5/scale);
+  ctx.strokeRect(selected.x*cellSize+0.5,selected.y*cellSize+0.5,cellSize-1,cellSize-1);
+}
+
+const confirmBar=document.getElementById("confirmBar");
+const confirmSwatch=document.getElementById("confirmSwatch");
+const confirmBtn=document.getElementById("confirmBtn");
+const cancelBtn=document.getElementById("cancelBtn");
+function showConfirmBar(){
+  confirmSwatch.style.background=currentColor;
+  confirmBar.style.bottom=(palette.offsetHeight+12)+"px";
+  confirmBar.style.display="flex";
+  confirmBtn.disabled=!canPlace;
+}
+function hideConfirmBar(){
+  confirmBar.style.display="none";
+}
+confirmBtn.addEventListener("click",()=>{
+  if(!selected||!canPlace) return;
+  if(socket && socket.readyState===WebSocket.OPEN){
+    socket.send(JSON.stringify({type:"place",x:selected.x,y:selected.y,color:currentColor}));
+    startCooldown();
+  }
+  clearSelection();
+});
+cancelBtn.addEventListener("click", clearSelection);
+
+/* PC – tıklama (sürükleme değilse hücre seç) */
+canvas.addEventListener("click",e=>{
+  if(dragMoved){ dragMoved=false; return; }
+  const {x,y}=screenToGrid(e.clientX,e.clientY);
+  selectCell(x,y);
+});
+
+/* PC – fare tekerleği ile imlecin altını sabit tutarak zoom */
+canvas.addEventListener("wheel",e=>{
+  e.preventDefault();
+  const newScale = scale * (1 - e.deltaY*0.001);
+  zoomAt(e.clientX, e.clientY, newScale);
+}, {passive:false});
+
+/* PC – sürükleyerek kaydırma (pan) */
+canvas.addEventListener("mousedown",e=>{
+  isDragging=true; dragMoved=false;
+  startX=e.clientX-offsetX; startY=e.clientY-offsetY;
+});
+canvas.addEventListener("mousemove",e=>{
+  if(!isDragging) return;
+  const nx=e.clientX-startX, ny=e.clientY-startY;
+  if(Math.abs(nx-offsetX)>3||Math.abs(ny-offsetY)>3) dragMoved=true;
+  offsetX=nx; offsetY=ny;
+  updateTransform();
+});
+canvas.addEventListener("mouseup",()=>{isDragging=false;});
+canvas.addEventListener("mouseleave",()=>{isDragging=false;});
+
+/* Mobil – pinch zoom + tek parmak pan + tek dokunuşla hücre seçme */
+function pinchDist(touches){
+  const dx=touches[0].clientX-touches[1].clientX;
+  const dy=touches[0].clientY-touches[1].clientY;
+  return Math.sqrt(dx*dx+dy*dy);
+}
+canvas.addEventListener("touchstart",e=>{
+  if(e.touches.length===1){
+    isDragging=true; dragMoved=false;
+    startX=e.touches[0].clientX-offsetX;
+    startY=e.touches[0].clientY-offsetY;
+  } else if(e.touches.length===2){
+    isDragging=false;
+    lastPinchDist=pinchDist(e.touches);
+  }
+}, {passive:true});
+
+canvas.addEventListener("touchmove",e=>{
+  if(e.touches.length===2){
+    e.preventDefault();
+    const dist=pinchDist(e.touches);
+    if(lastPinchDist){
+      const midX=(e.touches[0].clientX+e.touches[1].clientX)/2;
+      const midY=(e.touches[0].clientY+e.touches[1].clientY)/2;
+      zoomAt(midX, midY, scale*(dist/lastPinchDist));
+    }
+    lastPinchDist=dist;
+  } else if(e.touches.length===1 && isDragging){
+    e.preventDefault();
+    const nx=e.touches[0].clientX-startX;
+    const ny=e.touches[0].clientY-startY;
+    if(Math.abs(nx-offsetX)>6||Math.abs(ny-offsetY)>6) dragMoved=true;
+    offsetX=nx; offsetY=ny;
+    updateTransform();
+  }
+}, {passive:false});
+
+canvas.addEventListener("touchend",e=>{
+  const wasTap = e.touches.length===0 && e.changedTouches.length===1 && !dragMoved;
+  if(wasTap){
+    e.preventDefault(); // ayni dokunus icin tarayicinin tekrar "click" firlatmasini engelle
+    const t=e.changedTouches[0];
+    const {x,y}=screenToGrid(t.clientX,t.clientY);
+    selectCell(x,y);
+  }
+  isDragging=false; lastPinchDist=0; dragMoved=false;
+}, {passive:false});
+
+</script>
+</body>
+</html>
