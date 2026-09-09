@@ -11,18 +11,24 @@
   #palette {
     position:fixed; bottom:0; left:0; right:0;
     background:#222; padding:8px;
-    display:flex; gap:6px; overflow-x:auto; justify-content:center;
+    display:flex; gap:6px; overflow-x:auto; justify-content:flex-start;
+    -webkit-overflow-scrolling:touch;
   }
   .color { width:24px; height:24px; border:2px solid #555; flex-shrink:0; }
   .selected { border:2px solid gold; }
+  #topBar {
+    position:fixed; top:0; left:0; right:0; z-index:10;
+    display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between;
+    padding:10px; box-sizing:border-box; gap:8px;
+    pointer-events:none; /* bosluklar tuvale tiklamayi engellemesin */
+  }
+  #topBar > * { pointer-events:auto; flex-shrink:0; }
   #cooldown {
-    position:fixed; top:10px; right:10px;
     background:#222; padding:6px 10px; border-radius:6px;
-    font-size:14px; font-weight:bold; color:lime;
+    font-size:14px; font-weight:bold; color:lime; white-space:nowrap;
   }
   #topLeftBar {
-    position:fixed; top:10px; left:10px; z-index:10;
-    display:flex; align-items:center; gap:8px;
+    display:flex; align-items:center; gap:8px; min-width:0;
     background:#222; padding:6px 10px; border-radius:6px;
   }
   #gameLogo { width:28px; height:28px; object-fit:contain; border-radius:5px; flex-shrink:0; }
@@ -39,10 +45,11 @@
     font-weight:bold;
   }
   #fitBtn {
-    position:fixed; top:10px; left:50%; transform:translateX(-50%);
     background:#222; color:#fff; border:none; border-radius:6px;
-    padding:6px 12px; font-size:13px; font-weight:bold;
+    padding:6px 12px; font-size:13px; font-weight:bold; white-space:nowrap;
   }
+  .fitBtnFull { display:inline; }
+  .fitBtnShort { display:none; }
   #confirmBar {
     position:fixed; left:50%; transform:translateX(-50%);
     background:#222; padding:10px 14px; border-radius:10px;
@@ -125,7 +132,13 @@
       padding:12px 18px; font-size:16px;
     }
     #confirmSwatch { width:28px; height:28px; }
-    #fitBtn { padding:10px 16px; font-size:15px; }
+    #fitBtn { padding:8px 12px; font-size:13px; }
+    #topLeftBar { padding:5px 8px; gap:6px; }
+    #gameLogo { width:22px; height:22px; }
+    #founderText { font-size:12px; }
+    #cooldown { padding:5px 8px; font-size:13px; }
+    .fitBtnFull { display:none; }
+    .fitBtnShort { display:inline; }
     #menuLogo { max-width:100px; max-height:100px; }
     #menuTitle { font-size:26px; }
     #playBtn { width:100%; max-width:320px; padding:16px; font-size:20px; }
@@ -137,12 +150,17 @@
 <body>
 
 <canvas id="board"></canvas>
-<div id="cooldown" class="hud hidden">Hazır!</div>
-<div id="topLeftBar" class="hud hidden">
-  <img id="gameLogo" src="placeturk-logo.jpg" alt="PlaceTurk">
-  <span id="founderText">PlaceTurk V2</span>
+<div id="topBar" class="hud hidden">
+  <div id="topLeftBar">
+    <img id="gameLogo" src="placeturk-logo.jpg" alt="PlaceTurk">
+    <span id="founderText">PlaceTurk V2</span>
+  </div>
+  <button id="fitBtn">
+    <span class="fitBtnFull">Tahtaya Sığdır</span>
+    <span class="fitBtnShort">Sığdır</span>
+  </button>
+  <div id="cooldown">Hazır!</div>
 </div>
-<button id="fitBtn" class="hud hidden">Tahtaya Sığdır</button>
 <div id="palette" class="hud hidden"></div>
 <div id="confirmBar">
   <div id="confirmSwatch"></div>
@@ -251,7 +269,7 @@ document.getElementById("closeAnnounceBtn").addEventListener("click", ()=>{
 // Backend'i yeniden dagittiginda (orn. Render, Fly.io, Railway) SADECE
 // bu satiri yeni adresle degistirmen yeterli. wss:// (https) kullan,
 // ws:// (http) sadece yerel test icin.
-const BACKEND_WS_URL = "wss://pixeltur-backend.onrender.com";
+const BACKEND_WS_URL = "wss://placeturk-v2.onrender.com";
 let board=[];
 let socket;
 
