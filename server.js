@@ -44,12 +44,29 @@ const repeatTracker = new Map(); // ip -> { text, count, ids:[] }
 
 // Basit kufur/argo/+18 kelime filtresi. Kelime sinirlarina gore kontrol
 // ediyoruz (orn. "sik" gecen "sikayet" gibi masum kelimeleri yanlislikla
-// yakalamamak icin). Listeyi ihtiyaca gore genisletebilirsin.
+// yakalamamak icin). Cekim/kisaltma varyasyonlarinin cogunu tek tek
+// listeye ekliyoruz (kok bulma/stemming yapmiyoruz), bu yuzden %100
+// kapsama garanti degil - yeni bir kelime/varyasyon fark edersen
+// listeye eklemen yeterli.
 const BANNED_WORDS = [
-  "amk", "aq", "amq", "oç", "oc", "orospu", "piç", "pic",
-  "yarrak", "yarak", "sikeyim", "siktir", "sikim", "götveren",
-  "gotveren", "ibne", "kahpe", "şerefsiz", "serefsiz", "pezevenk",
-  "amcık", "amcik", "göt", "got", "yavşak", "yavsak", "sürtük", "surtuk"
+  // kisaltmalar
+  "amk", "aq", "amq", "mk", "oç", "oc", "sg", "sgt", "oe",
+  // kufur/hakaret kokleri ve cekimleri
+  "orospu", "orospi", "piç", "pic", "piçkurusu", "kahpe", "pezevenk",
+  "şerefsiz", "serefsiz", "namussuz", "yavşak", "yavsak", "sürtük",
+  "surtuk", "kancık", "kancik", "kaltak", "ibne", "ibnelik",
+  "gerizekalı", "gerizekali", "geri zekalı", "geri zekali", "mal",
+  "embesil", "dangalak", "dallama", "aptal şey", "it", "köpek herif",
+  "hayvan herif", "şerefsizlik", "serefsizlik",
+  // cinsel organ / cinsel icerik kokleri ve cekimleri
+  "yarrak", "yarak", "yarrağı", "yarragi", "yarrağım", "yarragim",
+  "sik", "sikim", "sikik", "sikeyim", "sikerim", "sikiyim", "sikilmiş",
+  "sikilmis", "siktir", "sikiş", "sikis", "sikişmek", "sikismek",
+  "götveren", "gotveren", "göt", "got", "götü", "gotu", "amcık",
+  "amcik", "am", "taşak", "tasak", "yumurta herif",
+  "porno", "porn", "pornografik", "seks", "sex", "sekse", "sexe",
+  "orgazm", "fetiş", "fetis",
+  "düzüşmek", "duzusmek", "düzerim", "duzerim", "düzeyim", "duzeyim"
 ];
 const BANNED_WORDS_REGEX = new RegExp(
   "(^|[^a-zçğıöşü0-9])(" + BANNED_WORDS.join("|") + ")([^a-zçğıöşü0-9]|$)",
