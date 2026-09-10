@@ -179,6 +179,38 @@
     margin-top:10px; align-self:flex-start; flex-shrink:0;
   }
 
+  #chatRules {
+    position:fixed; inset:0; z-index:120;
+    background:rgba(0,0,0,.94);
+    display:flex; align-items:center; justify-content:center;
+    padding:24px; box-sizing:border-box;
+  }
+  #chatRulesInner {
+    background:#1c1c1c; border:1px solid #444; border-radius:12px;
+    padding:22px 24px; max-width:420px; width:100%;
+    max-height:85vh; overflow-y:auto; box-sizing:border-box;
+    color:#fff; font-family:Arial, sans-serif; text-align:left;
+  }
+  #chatRulesInner h2 { margin:0 0 12px 0; font-size:19px; color:#ff6b6b; }
+  #chatRulesInner ul { margin:0 0 16px 0; padding-left:20px; }
+  #chatRulesInner li { font-size:13.5px; color:#ddd; line-height:1.6; margin-bottom:6px; }
+  #chatRulesInner .warnBox {
+    background:#2a1414; border:1px solid #5a2222; border-radius:8px;
+    padding:10px 12px; font-size:12.5px; color:#ffb3b3; margin-bottom:16px;
+    line-height:1.5;
+  }
+  #chatRulesAgreeRow {
+    display:flex; align-items:flex-start; gap:8px; margin-bottom:16px;
+    font-size:13px; color:#ccc;
+  }
+  #chatRulesAgreeRow input { margin-top:3px; flex-shrink:0; }
+  #chatRulesAcceptBtn {
+    background:#2ecc71; color:#fff; border:none; border-radius:8px;
+    padding:12px 20px; font-size:14px; font-weight:bold; width:100%;
+    cursor:pointer;
+  }
+  #chatRulesAcceptBtn:disabled { background:#555; color:#999; cursor:not-allowed; }
+
   /* Mobilde butonları büyüt */
   @media (max-width: 768px) {
     .color {
@@ -268,6 +300,26 @@
       <button id="chatSendBtn">Gönder</button>
     </div>
     <button id="closeChatBtn">Kapat</button>
+  </div>
+</div>
+
+<div id="chatRules" class="hidden">
+  <div id="chatRulesInner">
+    <h2>⚠️ Sohbet Kuralları</h2>
+    <ul>
+      <li>Kendine veya başkalarına ait telefon numarası, adres, şifre gibi <strong>özel/kişisel bilgi paylaşma.</strong></li>
+      <li>Hakaret, küfür, taciz, nefret söylemi ve yasa dışı içerik <strong>yasaktır.</strong></li>
+      <li>Bu sohbet anlık ve otomatik denetimsizdir; yazdığın her şeyden <strong>tamamen sen sorumlusun.</strong></li>
+      <li>Reklam, spam ve kötüye kullanım tespit edilirse erişimin kısıtlanabilir.</li>
+    </ul>
+    <div class="warnBox">
+      PlaceTurk yapımcıları/geliştiricileri, kullanıcılar tarafından sohbete yazılan hiçbir içerikten sorumlu değildir. Sohbette karşılaştığın olumsuz bir içerik varsa bu tamamen o içeriği yazan kullanıcıya aittir.
+    </div>
+    <label id="chatRulesAgreeRow">
+      <input type="checkbox" id="chatRulesCheckbox">
+      Yukarıdaki kuralları okudum ve kabul ediyorum.
+    </label>
+    <button id="chatRulesAcceptBtn" disabled>Kabul Ediyorum, Sohbete Gir</button>
   </div>
 </div>
 
@@ -372,17 +424,38 @@ chatNickInput.addEventListener("change", ()=>{
 
 document.getElementById("chatBtn").addEventListener("click", ()=>{
   announcePanel.classList.add("hidden");
-  chatPanel.classList.remove("hidden");
-  chatMessages.scrollTop = chatMessages.scrollHeight;
+  if(localStorage.getItem("placeturk_chat_rules_accepted")==="1"){
+    chatPanel.classList.remove("hidden");
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  } else {
+    chatRules.classList.remove("hidden");
+  }
 });
 document.getElementById("closeChatBtn").addEventListener("click", ()=>{
   chatPanel.classList.add("hidden");
+});
+
+/* Sohbet kuralları: kabul edilmeden sohbet paneli açılmıyor.
+   Onay tarayıcıda hatırlanıyor, bir daha her seferinde sormuyoruz. */
+const chatRules = document.getElementById("chatRules");
+const chatRulesCheckbox = document.getElementById("chatRulesCheckbox");
+const chatRulesAcceptBtn = document.getElementById("chatRulesAcceptBtn");
+chatRulesCheckbox.addEventListener("change", ()=>{
+  chatRulesAcceptBtn.disabled = !chatRulesCheckbox.checked;
+});
+chatRulesAcceptBtn.addEventListener("click", ()=>{
+  if(!chatRulesCheckbox.checked) return;
+  localStorage.setItem("placeturk_chat_rules_accepted", "1");
+  chatRules.classList.add("hidden");
+  chatPanel.classList.remove("hidden");
+  chatMessages.scrollTop = chatMessages.scrollHeight;
 });
 
 function addChatMessage(msg){
   const emptyMsg = chatMessages.querySelector(".chatEmpty");
   if(emptyMsg) emptyMsg.remove();
   const li = document.createElement("li");
+  if(msg.id!==undefined) li.dataset.id = msg.id;
   const nameSpan = document.createElement("span");
   nameSpan.className = "chatName";
   nameSpan.textContent = (msg.name || "Misafir") + ":";
@@ -392,6 +465,22 @@ function addChatMessage(msg){
   // cok fazla biriktirmesin diye eski mesajlari DOM'dan da sil
   while(chatMessages.children.length > 100) chatMessages.removeChild(chatMessages.firstChild);
   chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+/* Sunucu spam tespit edip bir mesaji sildiginde, o mesaji herkesin
+   ekranindan da kaldirir (tamamen yok etmek yerine "kaldirildi" izi
+   birakiyoruz, boylece "mesajim aniden kayboldu" kafa karisikligi olmaz). */
+function removeChatMessage(id){
+  const li = chatMessages.querySelector(`li[data-id="${id}"]`);
+  if(!li) return;
+  li.innerHTML = "";
+  li.style.color = "#777";
+  li.style.fontStyle = "italic";
+  li.textContent = "Bu mesaj spam nedeniyle kaldırıldı.";
+}
+
+function clearChat(){
+  chatMessages.innerHTML = '<li class="chatEmpty">Henüz mesaj yok, ilk yazan sen ol!</li>';
 }
 
 function sendChat(){
@@ -413,7 +502,9 @@ chatTextInput.addEventListener("keydown", e=>{ if(e.key==="Enter") sendChat(); }
 // bu satiri yeni adresle degistirmen yeterli. wss:// (https) kullan,
 // ws:// (http) sadece yerel test icin.
 const BACKEND_WS_URL = "wss://placeturk-v2.onrender.com";
-let board=[];
+let boardMap=new Map(); // "x,y" -> renk. Yerlestirilen her piksel buraya da yazilmali,
+                         // yoksa herhangi bir drawBoard() cagrisinda (orn. baska bir
+                         // hucre secince) o piksel "hafizada yok" sayilip siliniyordu.
 let boardLoaded=false;
 let socket;
 
@@ -422,12 +513,15 @@ function connect(){
   socket.onmessage=e=>{
     const data=JSON.parse(e.data);
     if(data.type==="init"){
-      board=data.board; drawBoard();
+      boardMap=new Map(data.board.map(p=>[p.x+","+p.y, p.color]));
+      drawBoard();
       boardLoaded=true; loadingMsg.classList.add("hidden");
       if(Array.isArray(data.chat)) data.chat.forEach(addChatMessage);
     }
-    if(data.type==="update"){ drawPixel(data.x,data.y,data.color); }
+    if(data.type==="update"){ applyPixel(data.x,data.y,data.color); }
     if(data.type==="chat"){ addChatMessage(data); }
+    if(data.type==="chat_delete"){ removeChatMessage(data.id); }
+    if(data.type==="chat_clear"){ clearChat(); }
   };
   // Ucretsiz sunucular hareketsizlikte uyuyabilir; baglanti koparsa
   // birkac saniye sonra otomatik yeniden baglanmayi dene.
@@ -439,12 +533,15 @@ connect();
 /* Çizim */
 function drawBoard(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  board.forEach(p=>{
-    ctx.fillStyle=p.color;
-    ctx.fillRect(p.x*cellSize,p.y*cellSize,cellSize,cellSize);
+  boardMap.forEach((color,key)=>{
+    const [x,y]=key.split(",").map(Number);
+    ctx.fillStyle=color;
+    ctx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
   });
 }
-function drawPixel(x,y,color){
+/* Yeni/degisen bir pikseli hem hafizadaki tahtaya (boardMap) hem ekrana yazar. */
+function applyPixel(x,y,color){
+  boardMap.set(x+","+y, color);
   ctx.fillStyle=color;
   ctx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
 }

@@ -36,8 +36,27 @@ const lastPlacedAt = new Map();
 // Sohbet: sadece bellekte tutuluyor, kalici degil (sunucu yeniden
 // baslarsa - orn. uykudan uyanirken - sifirlanir). Bu olcekte bir
 // veritabani tablosuna gerek yok, basit ve yeterli.
-const chatHistory = [];
+let chatHistory = [];
 const lastChatAt = new Map();
+let nextChatId = 1;
+// IP basina "ayni mesaji ust uste kac kez yazdi" takibi (spam tespiti icin)
+const repeatTracker = new Map(); // ip -> { text, count, ids:[] }
+
+function broadcast(obj) {
+  const payload = JSON.stringify(obj);
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) client.send(payload);
+  });
+}
+
+// Sohbet gecmisini 24 saatte bir otomatik temizle (istek uzerine).
+const CHAT_HISTORY_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+setInterval(() => {
+  chatHistory = [];
+  repeatTracker.clear();
+  broadcast({ type: "chat_clear" });
+  console.log("Sohbet gecmisi 24 saatlik periyotla temizlendi.");
+}, CHAT_HISTORY_MAX_AGE_MS);
 
 async function ensureSchema() {
   await pool.query(`
@@ -96,16 +115,32 @@ wss.on("connection", async (ws, req) => {
       }
       lastChatAt.set(ws.clientIp, now);
 
-      const entry = { name, text, ts: now };
+      // --- Ayni mesaji ust uste yazan kullanicilarin spam'ini temizle ---
+      let tracker = repeatTracker.get(ws.clientIp);
+      if (!tracker || tracker.text !== text) {
+        tracker = { text, count: 0, ids: [] };
+        repeatTracker.set(ws.clientIp, tracker);
+      }
+      tracker.count++;
+
+      if (tracker.count >= 3) {
+        // 3. tekrarda: onceki ayni mesajlari herkesin ekranindan da sil,
+        // bu mesaji da hic eklemeden yoksay.
+        tracker.ids.forEach((id) => {
+          chatHistory = chatHistory.filter((m) => m.id !== id);
+          broadcast({ type: "chat_delete", id });
+        });
+        tracker.ids = [];
+        return;
+      }
+
+      const id = nextChatId++;
+      const entry = { id, name, text, ts: now };
       chatHistory.push(entry);
       if (chatHistory.length > CHAT_HISTORY_LIMIT) chatHistory.shift();
+      tracker.ids.push(id);
 
-      const payload = JSON.stringify({ type: "chat", name, text, ts: now });
-      wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(payload);
-        }
-      });
+      broadcast({ type: "chat", id, name, text, ts: now });
       return;
     }
 
@@ -142,12 +177,7 @@ wss.on("connection", async (ws, req) => {
       return;
     }
 
-    const payload = JSON.stringify({ type: "update", x, y, color });
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(payload);
-      }
-    });
+    broadcast({ type: "update", x, y, color });
   });
 });
 
