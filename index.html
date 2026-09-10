@@ -130,8 +130,20 @@
   }
 
   #chatBtn {
+    position:relative;
     background:#333; color:#7ecbff; border:1px solid #444; border-radius:10px;
     padding:10px 22px; font-size:15px; font-weight:bold; cursor:pointer;
+  }
+  #inGameChatBtn {
+    position:relative; background:#222; color:#7ecbff; border:none;
+    border-radius:6px; padding:6px 10px; font-size:15px; cursor:pointer;
+  }
+  .chatBadge {
+    position:absolute; top:-6px; right:-6px;
+    background:#ff4444; color:#fff; font-size:11px; font-weight:bold;
+    min-width:16px; height:16px; padding:0 3px; border-radius:8px;
+    display:flex; align-items:center; justify-content:center;
+    line-height:1;
   }
   #chatPanel {
     position:fixed; inset:0; z-index:110;
@@ -258,6 +270,7 @@
     <span class="fitBtnShort">Sığdır</span>
   </button>
   <div id="topRightGroup">
+    <button id="inGameChatBtn">💬<span class="chatBadge hidden"></span></button>
     <div id="onlineBadge">🟢 -</div>
     <div id="cooldown">Hazır!</div>
   </div>
@@ -276,7 +289,7 @@
   <p id="menuSubtitle">Türkiye'nin r/place tarzı ortak piksel tahtası</p>
   <p id="menuOnline">🟢 - kişi çevrimiçi</p>
   <button id="announceBtn">📢 Duyurular</button>
-  <button id="chatBtn">💬 Sohbet</button>
+  <button id="chatBtn">💬 Sohbet<span class="chatBadge hidden"></span></button>
   <button id="playBtn">Oyuna Başla</button>
 </div>
 
@@ -459,7 +472,13 @@ chatNickInput.addEventListener("change", ()=>{
   localStorage.setItem("placeturk_nick", chatNickInput.value.trim().slice(0,20));
 });
 
-document.getElementById("chatBtn").addEventListener("click", ()=>{
+document.getElementById("chatBtn").addEventListener("click", openChatPanel);
+document.getElementById("inGameChatBtn").addEventListener("click", openChatPanel);
+document.getElementById("closeChatBtn").addEventListener("click", ()=>{
+  chatPanel.classList.add("hidden");
+});
+
+function openChatPanel(){
   announcePanel.classList.add("hidden");
   if(localStorage.getItem("placeturk_chat_rules_accepted")==="1"){
     chatPanel.classList.remove("hidden");
@@ -467,10 +486,9 @@ document.getElementById("chatBtn").addEventListener("click", ()=>{
   } else {
     chatRules.classList.remove("hidden");
   }
-});
-document.getElementById("closeChatBtn").addEventListener("click", ()=>{
-  chatPanel.classList.add("hidden");
-});
+  unreadChat = 0;
+  updateChatBadge();
+}
 
 /* Sohbet kuralları: kabul edilmeden sohbet paneli açılmıyor.
    Onay tarayıcıda hatırlanıyor, bir daha her seferinde sormuyoruz. */
@@ -486,7 +504,20 @@ chatRulesAcceptBtn.addEventListener("click", ()=>{
   chatRules.classList.add("hidden");
   chatPanel.classList.remove("hidden");
   chatMessages.scrollTop = chatMessages.scrollHeight;
+  unreadChat = 0;
+  updateChatBadge();
 });
+
+/* Okunmamış mesaj rozeti: oyun içindeyken sohbet kapalıyken gelen her
+   mesaj için sayaç artıyor, hem ana menüdeki hem oyun içindeki
+   ikonda küçük kırmızı bir rozet olarak gösteriliyor. */
+let unreadChat = 0;
+function updateChatBadge(){
+  document.querySelectorAll(".chatBadge").forEach(b=>{
+    if(unreadChat>0){ b.textContent = unreadChat>9?"9+":unreadChat; b.classList.remove("hidden"); }
+    else b.classList.add("hidden");
+  });
+}
 
 function addChatMessage(msg){
   const emptyMsg = chatMessages.querySelector(".chatEmpty");
@@ -580,7 +611,10 @@ function connect(){
       if(typeof data.online==="number") updateOnlineCount(data.online);
     }
     if(data.type==="update"){ applyPixel(data.x,data.y,data.color); }
-    if(data.type==="chat"){ addChatMessage(data); }
+    if(data.type==="chat"){
+      addChatMessage(data);
+      if(chatPanel.classList.contains("hidden")){ unreadChat++; updateChatBadge(); }
+    }
     if(data.type==="chat_delete"){ removeChatMessage(data.id); }
     if(data.type==="chat_clear"){ clearChat(); }
     if(data.type==="chat_blocked"){ showChatBlockedNotice(data.reason); }
