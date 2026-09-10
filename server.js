@@ -3,7 +3,9 @@ const WebSocket = require("ws");
 const { Pool } = require("pg");
 
 const GRID_SIZE = 200;
-const COOLDOWN_MS = 10 * 60 * 1000; // 10 dakika - client'taki süreyle eşleşmeli
+const COOLDOWN_MS = 10 * 1000; // 10 saniye - client'taki süreyle eşleşmeli
+const CHAT_COOLDOWN_MS = 2 * 1000; // spam'i onlemek icin kisa bir sohbet bekleme suresi
+const CHAT_HISTORY_LIMIT = 50;
 const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;
 
 const pool = new Pool({
@@ -21,7 +23,7 @@ const server = http.createServer((req, res) => {
     return;
   }
   res.writeHead(200, { "Content-Type": "text/plain" });
-  res.end("PixelTur backend calisiyor");
+  res.end("PlaceTurk backend calisiyor");
 });
 
 const wss = new WebSocket.Server({ server });
@@ -30,6 +32,12 @@ const wss = new WebSocket.Server({ server });
 // atlatılamaz hale getirmek için). Basit bir bellek içi harita; sunucu
 // yeniden başlarsa sıfırlanır, bu da bu ölçekte sorun değil.
 const lastPlacedAt = new Map();
+
+// Sohbet: sadece bellekte tutuluyor, kalici degil (sunucu yeniden
+// baslarsa - orn. uykudan uyanirken - sifirlanir). Bu olcekte bir
+// veritabani tablosuna gerek yok, basit ve yeterli.
+const chatHistory = [];
+const lastChatAt = new Map();
 
 async function ensureSchema() {
   await pool.query(`
@@ -60,7 +68,7 @@ wss.on("connection", async (ws, req) => {
 
   try {
     const board = await loadBoard();
-    ws.send(JSON.stringify({ type: "init", board }));
+    ws.send(JSON.stringify({ type: "init", board, chat: chatHistory }));
   } catch (err) {
     console.error("Tahta yuklenirken hata:", err);
   }
@@ -71,6 +79,34 @@ wss.on("connection", async (ws, req) => {
       data = JSON.parse(msg);
     } catch {
       return; // gecersiz JSON, sessizce yoksay
+    }
+
+    if (data.type === "chat") {
+      let { name, text } = data;
+      if (typeof text !== "string") return;
+      text = text.trim().slice(0, 200);
+      if (!text) return;
+      name = (typeof name === "string" ? name.trim() : "").slice(0, 20) || "Misafir";
+
+      // --- Sunucu tarafi sohbet cooldown'i (spam onleme) ---
+      const now = Date.now();
+      const lastChat = lastChatAt.get(ws.clientIp) || 0;
+      if (now - lastChat < CHAT_COOLDOWN_MS) {
+        return;
+      }
+      lastChatAt.set(ws.clientIp, now);
+
+      const entry = { name, text, ts: now };
+      chatHistory.push(entry);
+      if (chatHistory.length > CHAT_HISTORY_LIMIT) chatHistory.shift();
+
+      const payload = JSON.stringify({ type: "chat", name, text, ts: now });
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(payload);
+        }
+      });
+      return;
     }
 
     if (data.type !== "place") return;
@@ -120,7 +156,7 @@ const PORT = process.env.PORT || 3000;
 ensureSchema()
   .then(() => {
     server.listen(PORT, () => {
-      console.log(`PixelTur backend ${PORT} portunda calisiyor`);
+      console.log(`PlaceTurk backend ${PORT} portunda calisiyor`);
     });
   })
   .catch((err) => {
