@@ -32,19 +32,14 @@
   #topLeftBar {
     display:flex; align-items:center; gap:8px; min-width:0;
     background:#222; padding:6px 10px; border-radius:6px;
+    cursor:pointer;
   }
   #gameLogo { width:28px; height:28px; object-fit:contain; border-radius:5px; flex-shrink:0; }
   #founderText { font-size:14px; font-weight:bold; color:#FFD700; white-space:nowrap; }
-  #early {
-    position:fixed;
-    top:50%;
-    right:10px;
-    transform:translateY(-50%);
-    background:#222;
-    color:#FFD700;
-    padding:8px 12px;
-    border-radius:6px;
-    font-weight:bold;
+  #topRightGroup { display:flex; align-items:center; gap:8px; }
+  #onlineBadge {
+    background:#222; padding:6px 10px; border-radius:6px;
+    font-size:14px; font-weight:bold; color:#7ecbff; white-space:nowrap;
   }
   #fitBtn {
     background:#222; color:#fff; border:none; border-radius:6px;
@@ -95,6 +90,7 @@
   }
   #menuTitle { font-size:32px; font-weight:bold; margin:0; color:#FFD700; }
   #menuSubtitle { font-size:14px; color:#aaa; margin:-8px 0 0 0; }
+  #menuOnline { font-size:13px; color:#7ecbff; margin:-6px 0 0 0; }
   #playBtn {
     background:#2ecc71; color:#fff; border:none; border-radius:10px;
     padding:14px 36px; font-size:18px; font-weight:bold; cursor:pointer;
@@ -150,6 +146,7 @@
     display:flex; flex-direction:column; max-height:80vh;
   }
   #chatPanelInner h2 { margin:0 0 10px 0; font-size:20px; color:#7ecbff; flex-shrink:0; }
+  #chatOnline { font-size:12px; color:#7ecbff; font-weight:normal; margin-left:8px; }
   #chatMessages {
     list-style:none; margin:0 0 10px 0; padding:0;
     overflow-y:auto; flex:1; min-height:180px;
@@ -250,7 +247,7 @@
   <div class="spinner"></div>
   Tahta yükleniyor...<br>
   <span style="color:#aaa;font-size:12px;">Sunucu uyuyor olabilir, bu 30-60 saniye sürebilir.</span>
-</div></canvas>
+</div>
 <div id="topBar" class="hud hidden">
   <div id="topLeftBar">
     <img id="gameLogo" src="placeturk-logo.jpg" alt="PlaceTurk">
@@ -260,7 +257,10 @@
     <span class="fitBtnFull">Tahtaya Sığdır</span>
     <span class="fitBtnShort">Sığdır</span>
   </button>
-  <div id="cooldown">Hazır!</div>
+  <div id="topRightGroup">
+    <div id="onlineBadge">🟢 -</div>
+    <div id="cooldown">Hazır!</div>
+  </div>
 </div>
 <div id="palette" class="hud hidden"></div>
 <div id="confirmBar">
@@ -268,13 +268,13 @@
   <button id="confirmBtn">Yerleştir</button>
   <button id="cancelBtn">Vazgeç</button>
 </div>
-<div id="early" class="hud hidden">Erken Erişim</div>
 
 <div id="mainMenu">
   <!-- Logo dosyası placeturk-logo.jpg olarak proje klasöründe duruyor. -->
   <img id="menuLogo" src="placeturk-logo.jpg" alt="PlaceTurk logo" onerror="this.style.display='none'">
   <h1 id="menuTitle">PlaceTurk</h1>
   <p id="menuSubtitle">Türkiye'nin r/place tarzı ortak piksel tahtası</p>
+  <p id="menuOnline">🟢 - kişi çevrimiçi</p>
   <button id="announceBtn">📢 Duyurular</button>
   <button id="chatBtn">💬 Sohbet</button>
   <button id="playBtn">Oyuna Başla</button>
@@ -290,7 +290,7 @@
 
 <div id="chatPanel" class="hidden">
   <div id="chatPanelInner">
-    <h2>💬 Sohbet</h2>
+    <h2>💬 Sohbet <span id="chatOnline"></span></h2>
     <ul id="chatMessages"><li class="chatEmpty">Henüz mesaj yok, ilk yazan sen ol!</li></ul>
     <div id="chatNickRow">
       <input id="chatNickInput" type="text" maxlength="20" placeholder="İsmin (opsiyonel)">
@@ -351,13 +351,42 @@ palette.firstChild.classList.add("selected");
 /* Cooldown */
 let canPlace=true; let cooldownTime=10;
 const cooldownDiv=document.getElementById("cooldown");
+
+/* Ses + titreşim: tarayıcılar AudioContext'i ancak bir kullanıcı
+   etkileşiminden sonra çalıştırmaya izin veriyor, o yüzden ilk
+   dokunuşta/tıklamada sessizce hazırlıyoruz. */
+let audioCtx=null;
+function unlockAudio(){
+  if(!audioCtx){
+    try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+  }
+  document.removeEventListener("pointerdown", unlockAudio);
+}
+document.addEventListener("pointerdown", unlockAudio);
+
+function notifyCooldownReady(){
+  if(navigator.vibrate) navigator.vibrate(150);
+  if(audioCtx){
+    try{
+      const osc=audioCtx.createOscillator();
+      const gain=audioCtx.createGain();
+      osc.type="sine"; osc.frequency.value=880;
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime+0.25);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(); osc.stop(audioCtx.currentTime+0.25);
+    }catch(e){}
+  }
+}
+
 function startCooldown(){
   canPlace=false; let t=cooldownTime;
   if(confirmBtn) confirmBtn.disabled=true;
   const timer=setInterval(()=>{
     t--; if(t<=0){clearInterval(timer); canPlace=true;
       cooldownDiv.textContent="Hazır!"; cooldownDiv.style.color="lime";
-      if(confirmBtn) confirmBtn.disabled=false;}
+      if(confirmBtn) confirmBtn.disabled=false;
+      notifyCooldownReady();}
     else{cooldownDiv.textContent = t<60 ? `${t}s` : `${Math.floor(t/60)}:${String(t%60).padStart(2,"0")}`;
       cooldownDiv.style.color="#ff4444";}
   },1000);
@@ -393,6 +422,14 @@ document.getElementById("playBtn").addEventListener("click", ()=>{
   document.querySelectorAll(".hud").forEach(el=>el.classList.remove("hidden"));
   fitToScreen(); // palet artik gorunur oldugu icin yuksekligi yeniden hesapla
   if(!boardLoaded) loadingMsg.classList.remove("hidden");
+});
+
+/* Oyun icindeki kose logosuna basinca ana menuye geri don */
+document.getElementById("topLeftBar").addEventListener("click", ()=>{
+  document.querySelectorAll(".hud").forEach(el=>el.classList.add("hidden"));
+  loadingMsg.classList.add("hidden");
+  if(typeof clearSelection==="function") clearSelection();
+  mainMenu.classList.remove("hidden");
 });
 
 /* Duyurular: ayrı, kara bir sekme/panel olarak açılıp kapanıyor */
@@ -483,6 +520,18 @@ function clearChat(){
   chatMessages.innerHTML = '<li class="chatEmpty">Henüz mesaj yok, ilk yazan sen ol!</li>';
 }
 
+/* Sunucu bir mesaji kufur/argo filtresi yuzunden reddettiginde kisa
+   sureli bir uyari gosterir. */
+function showChatBlockedNotice(reason){
+  const li = document.createElement("li");
+  li.style.color = "#ff8080";
+  li.style.fontStyle = "italic";
+  li.textContent = "⚠️ " + (reason || "Mesajın gönderilemedi.");
+  chatMessages.appendChild(li);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  setTimeout(()=>{ li.remove(); }, 4000);
+}
+
 function sendChat(){
   const text = chatTextInput.value.trim();
   if(!text || chatCooldown) return;
@@ -496,6 +545,17 @@ function sendChat(){
 }
 chatSendBtn.addEventListener("click", sendChat);
 chatTextInput.addEventListener("keydown", e=>{ if(e.key==="Enter") sendChat(); });
+
+/* Çevrimiçi sayacı: oyun içi rozet, ana menü ve sohbet başlığı hepsi
+   ayni anda güncelleniyor. */
+const onlineBadge=document.getElementById("onlineBadge");
+const menuOnline=document.getElementById("menuOnline");
+const chatOnline=document.getElementById("chatOnline");
+function updateOnlineCount(count){
+  onlineBadge.textContent = `🟢 ${count}`;
+  menuOnline.textContent = `🟢 ${count} kişi çevrimiçi`;
+  chatOnline.textContent = `(${count} çevrimiçi)`;
+}
 
 /* WebSocket */
 // Backend'i yeniden dagittiginda (orn. Render, Fly.io, Railway) SADECE
@@ -517,11 +577,14 @@ function connect(){
       drawBoard();
       boardLoaded=true; loadingMsg.classList.add("hidden");
       if(Array.isArray(data.chat)) data.chat.forEach(addChatMessage);
+      if(typeof data.online==="number") updateOnlineCount(data.online);
     }
     if(data.type==="update"){ applyPixel(data.x,data.y,data.color); }
     if(data.type==="chat"){ addChatMessage(data); }
     if(data.type==="chat_delete"){ removeChatMessage(data.id); }
     if(data.type==="chat_clear"){ clearChat(); }
+    if(data.type==="chat_blocked"){ showChatBlockedNotice(data.reason); }
+    if(data.type==="online"){ updateOnlineCount(data.count); }
   };
   // Ucretsiz sunucular hareketsizlikte uyuyabilir; baglanti koparsa
   // birkac saniye sonra otomatik yeniden baglanmayi dene.

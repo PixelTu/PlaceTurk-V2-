@@ -42,6 +42,23 @@ let nextChatId = 1;
 // IP basina "ayni mesaji ust uste kac kez yazdi" takibi (spam tespiti icin)
 const repeatTracker = new Map(); // ip -> { text, count, ids:[] }
 
+// Basit kufur/argo/+18 kelime filtresi. Kelime sinirlarina gore kontrol
+// ediyoruz (orn. "sik" gecen "sikayet" gibi masum kelimeleri yanlislikla
+// yakalamamak icin). Listeyi ihtiyaca gore genisletebilirsin.
+const BANNED_WORDS = [
+  "amk", "aq", "amq", "oç", "oc", "orospu", "piç", "pic",
+  "yarrak", "yarak", "sikeyim", "siktir", "sikim", "götveren",
+  "gotveren", "ibne", "kahpe", "şerefsiz", "serefsiz", "pezevenk",
+  "amcık", "amcik", "göt", "got", "yavşak", "yavsak", "sürtük", "surtuk"
+];
+const BANNED_WORDS_REGEX = new RegExp(
+  "(^|[^a-zçğıöşü0-9])(" + BANNED_WORDS.join("|") + ")([^a-zçğıöşü0-9]|$)",
+  "i"
+);
+function containsBannedWord(text) {
+  return BANNED_WORDS_REGEX.test(text.toLocaleLowerCase("tr"));
+}
+
 function broadcast(obj) {
   const payload = JSON.stringify(obj);
   wss.clients.forEach((client) => {
@@ -84,10 +101,16 @@ function getClientIp(req) {
 
 wss.on("connection", async (ws, req) => {
   ws.clientIp = getClientIp(req);
+  broadcast({ type: "online", count: wss.clients.size });
+
+  ws.on("close", () => {
+    // biraz gecikmeyle yayinlayalim ki ws zaten clients setinden cikmis olsun
+    setTimeout(() => broadcast({ type: "online", count: wss.clients.size }), 0);
+  });
 
   try {
     const board = await loadBoard();
-    ws.send(JSON.stringify({ type: "init", board, chat: chatHistory }));
+    ws.send(JSON.stringify({ type: "init", board, chat: chatHistory, online: wss.clients.size }));
   } catch (err) {
     console.error("Tahta yuklenirken hata:", err);
   }
@@ -106,6 +129,18 @@ wss.on("connection", async (ws, req) => {
       text = text.trim().slice(0, 200);
       if (!text) return;
       name = (typeof name === "string" ? name.trim() : "").slice(0, 20) || "Misafir";
+
+      // --- Kufur/argo/+18 filtresi: bu kelimeler geciyorsa mesaj hic
+      // yayinlanmiyor, gonderene de bir seffaflik icin bilgi gonderiliyor ---
+      if (containsBannedWord(text) || containsBannedWord(name)) {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: "chat_blocked",
+            reason: "Mesajın uygunsuz içerik nedeniyle gönderilemedi."
+          }));
+        }
+        return;
+      }
 
       // --- Sunucu tarafi sohbet cooldown'i (spam onleme) ---
       const now = Date.now();
